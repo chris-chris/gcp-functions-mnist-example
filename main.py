@@ -1,11 +1,20 @@
 import numpy
 import tensorflow
 
-from google.cloud import storage
+import requests
+from io import BytesIO
+from werkzeug.exceptions import BadRequest
+
 from tensorflow.keras.layers import Dense, Flatten, Conv2D
 from tensorflow.keras import Model
 from PIL import Image
+from flask import jsonify
 
+URL = 'url'
+CLASS = 'class'
+CODE = 'code'
+MESSAGE = 'message'
+DATA = 'data'
 
 # We keep model as global variable so we don't have to reload it in case of warm invocations
 model = None
@@ -26,36 +35,59 @@ class CustomModel(Model):
         return self.d2(x)
 
 
-def download_blob(bucket_name, source_blob_name, destination_file_name):
-    """Downloads a blob from the bucket."""
-    storage_client = storage.Client()
-    bucket = storage_client.get_bucket(bucket_name)
-    blob = bucket.blob(source_blob_name)
+def predict_mnist(request):
 
-    blob.download_to_filename(destination_file_name)
+    parameters = [
+        URL,
+    ]
 
-    print('Blob {} downloaded to {}.'.format(
-        source_blob_name,
-        destination_file_name))
+    if request.get_json():
+        json_request = request.get_json()
+        for parameter in parameters:
+            if not json_request.get(parameter) is None:
+                continue
+            raise BadRequest('invalid request parameter: %s' % parameter)
+
+        url = json_request.get(URL)
+
+    else:
+        raise BadRequest('invalid arguments error')
+
+    predicted_class = predict_mnist_internal(url)
+
+    data = {
+        CLASS: predicted_class,
+    }
+
+    res = {
+        CODE: 200,
+        MESSAGE: 'OK',
+        DATA: data,
+    }
+    return jsonify(res)
 
 
-def handler(request):
+def predict_mnist_internal(url):
+
     global model
     class_names = ['T-shirt/top', 'Trouser', 'Pullover', 'Dress', 'Coat',
                    'Sandal', 'Shirt', 'Sneaker', 'Bag', 'Ankle boot']
 
     # Model load which only happens during cold starts
     if model is None:
-        download_blob('<your_bucket_name>', 'tensorflow/fashion_mnist_weights.index', '/tmp/fashion_mnist_weights.index')
-        download_blob('<your_bucket_name>', 'tensorflow/fashion_mnist_weights.data-00000-of-00001', '/tmp/fashion_mnist_weights.data-00000-of-00001')
         model = CustomModel()
-        model.load_weights('/tmp/fashion_mnist_weights')
+        model.load_weights('fashion_mnist_weights')
 
-    download_blob('<your_bucket_name>', 'tensorflow/test.png', '/tmp/test.png')
-    image = numpy.array(Image.open('/tmp/test.png'))
-    input_np = (numpy.array(Image.open('/tmp/test.png'))/255)[numpy.newaxis,:,:,numpy.newaxis]
+    # url = 'https://raw.githubusercontent.com/ryfeus/gcf-packs/master/tensorflow2.0/example/test.png'
+
+    response = requests.get(url)
+
+    input_np = (numpy.array(Image.open(BytesIO(response.content)))/255)[numpy.newaxis,:,:,numpy.newaxis]
     predictions = model.call(input_np)
     print(predictions)
-    print("Image is "+class_names[numpy.argmax(predictions)])
+    predicted_class = class_names[numpy.argmax(predictions)]
+    print("Image is " + predicted_class)
+    return predicted_class
 
-    return class_names[numpy.argmax(predictions)]
+
+predict_mnist_internal('https://raw.githubusercontent.com/ryfeus/gcf-packs/master/tensorflow2.0/example/test.png')
