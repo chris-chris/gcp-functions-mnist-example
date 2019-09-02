@@ -78,8 +78,6 @@ def predict_mnist_internal(url):
         model = CustomModel()
         model.load_weights('fashion_mnist_weights')
 
-    # url = 'https://raw.githubusercontent.com/ryfeus/gcf-packs/master/tensorflow2.0/example/test.png'
-
     response = requests.get(url)
 
     input_np = (numpy.array(Image.open(BytesIO(response.content)))/255)[numpy.newaxis,:,:,numpy.newaxis]
@@ -90,4 +88,4 @@ def predict_mnist_internal(url):
     return predicted_class
 
 
-predict_mnist_internal('https://raw.githubusercontent.com/ryfeus/gcf-packs/master/tensorflow2.0/example/test.png')
+# predict_mnist_internal('https://raw.githubusercontent.com/ryfeus/gcf-packs/master/tensorflow2.0/example/test.png')
